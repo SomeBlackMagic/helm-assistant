@@ -1,0 +1,10 @@
+pvc:
+  enabled: true
+  name: foo
+  size: 1Gi
+  accessMode: ReadWriteMany
+  storageClassName: testStorageClassName
+  volumePermissions:
+    enabled: false
+    runAsUser: 0
+    fsGroup: 0

@@ -1,0 +1,19 @@
+apiVersion: v2
+description: app-job
+name: app-job
+version: 1.0.2
+dependencies:
+  - name: common
+    repository: https://charts.bitnami.com/bitnami
+    tags:
+      - bitnami-common
+    version: 2.x.x
+
+  - name: someblackmagic-common
+    repository: https://someblackmagic.github.io/helm-charts
+    tags:
+      - someblackmagic-common
+    version: 0.x.x
+maintainers:
+  - name: Andrii Cherny
+    url: https://github.com/wirwolf

@@ -1,0 +1,15 @@
+image:
+  registry: registry
+  repository: repository
+  tag: some-tag
+  digest: sha256:some-sha-code
+
+job:
+  id: job-id
+  command: 'foo'
+  arguments: 'bar paz'
+  backoffLimit: 4
+  parallelism: 1
+  ttlSecondsAfterFinished: 7200
+  activeDeadlineSeconds: 100
+  completions: 1

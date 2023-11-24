@@ -1,0 +1,6 @@
+image:
+  registry: docker.io
+  repository: path/to/docker/image
+  tag: v1.0.0
+  pullPolicy: IfNotPresent
+  id: 123

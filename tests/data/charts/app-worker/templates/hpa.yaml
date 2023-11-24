@@ -1,0 +1,62 @@
+{{- if and (eq $.Values.autoscaling.enabled true) (eq $.Values.autoscaling.active true) (eq $.Values.autoscaling.externalMetric.rabbitmq.enabled  true) ( $.Capabilities.APIVersions.Has "monitoring.coreos.com/v1" ) }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ $.Release.Name }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  groups:
+    - name: {{ $.Release.Name }}-queue-size # Define the name of your rule
+      rules:
+        - record: {{ include "worker.hpa_metric_name" . }}_messages_waiting_in_queue_name # The name of the metrics you want
+          expr: rabbitmq_queue_messages{queue="{{ $.Values.autoscaling.externalMetric.rabbitmq.queue }}", vhost="{{ $.Values.autoscaling.externalMetric.rabbitmq.vhost }}", namespace="{{ $.Values.autoscaling.externalMetric.rabbitmq.namespace }}" } # Query to make to prometheus
+          labels:
+            namespace: {{ $.Release.Namespace }}
+
+---
+{{- end }}
+
+{{- if and (eq $.Values.autoscaling.enabled true) (eq $.Values.autoscaling.active true) }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $.Release.Name }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $.Release.Name }}
+  minReplicas: {{ $.Values.autoscaling.minReplicas }}
+  maxReplicas: {{ $.Values.autoscaling.maxReplicas }}
+  metrics:
+    {{- with $.Values.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ . }}
+    {{- end }}
+    {{- with $.Values.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ . }}
+    {{- end }}
+    {{- if $.Values.autoscaling.externalMetric.rabbitmq.enabled }}
+    - type: Object
+      object:
+        metric:
+          name: {{ include "worker.hpa_metric_name" . }}_messages_waiting_in_queue_name
+        describedObject:
+          apiVersion: v1
+          kind: Namespace
+          name: {{ $.Release.Namespace }}
+        target:
+          type: Value
+          value: {{ $.Values.autoscaling.externalMetric.rabbitmq.value }}
+    {{- end }}
+
+{{- end }}

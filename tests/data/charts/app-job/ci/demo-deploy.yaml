@@ -1,0 +1,12 @@
+image:
+  registry: docker.io
+  repository: busybox
+  tag: 1.28
+  id: sha256:some-sha-code
+
+job:
+  idAutoGenerate: true
+  command:
+  - /bin/sh
+  - -c
+  - date; echo Hello from the Kubernetes cluster

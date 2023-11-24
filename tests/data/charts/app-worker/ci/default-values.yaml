@@ -1,0 +1,44 @@
+command: "kubectl"
+# arguments: "get pods"
+arguments:
+  - get
+  - pods
+
+image:
+  digest: digest
+  id: id
+
+initApplication:
+  - name: initApplication
+    command:
+      - foo
+      - bar
+    args: "ls --help"
+    resources:
+      requests:
+        cpu: "30m"
+        memory: 50Mi
+      limits:
+        cpu: "100m"
+        memory: 100Mi
+
+extraEnvVarsSecrets:
+  - name: foo
+    checksum: sha256sum-value
+  - name: bar
+    checksum: sha256sum-value
+
+
+podSecurityContext:
+  enabled: true
+
+containerSecurityContext:
+  enabled: true
+
+autoscaling:
+  enabled: true
+
+externalSecret:
+  enabled: true
+  secretStoreRef:
+    name: vault-backend-global

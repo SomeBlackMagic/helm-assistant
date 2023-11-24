@@ -1,0 +1,14 @@
+metadata:
+  deployedBy: null-value
+  pipelineUrl: null-value
+
+pvc:
+  enabled: false
+  name: ~
+  size: 1Gi
+  accessMode: ReadWriteMany
+  storageClassName: ~
+  volumePermissions:
+    enabled: false
+    runAsUser: 0
+    fsGroup: 0

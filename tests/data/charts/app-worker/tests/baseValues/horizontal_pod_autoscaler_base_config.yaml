@@ -1,0 +1,3 @@
+autoscaling:
+  active: true
+  enabled: true

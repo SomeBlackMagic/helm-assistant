@@ -1,0 +1,17 @@
+image:
+  registry: docker.io
+  repository: someblackmagic/helm-assistant
+  tag: image-for-run-tests
+  pullPolicy: IfNotPresent
+  id: 123123123
+
+command: "bash"
+arguments: "/test.sh"
+
+readinessProbe:
+  enabled: true
+  periodSeconds: 1
+  exec:
+    command:
+      - cat
+      - /var/lock/ready.lock

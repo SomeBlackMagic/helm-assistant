@@ -1,0 +1,152 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}
+  labels:
+    helm.sh/chart-name: {{ $.Chart.Name }}
+    helm.sh/chart-version: {{ $.Chart.Version }}
+    app.kubernetes.io/name: {{ $.Release.Name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+  annotations:
+    metadata/deployed-by: {{ $.Values.metadata.deployedBy | quote }}
+    metadata/pipeline-url: {{ $.Values.metadata.pipelineUrl | quote }}
+
+    {{- if $.Values.secretReloader.enabled }}
+      {{- if $.Values.secretReloader.watchExternalSecrets }}
+    secret.reloader.stakater.com/reload: "{{- template "deployment.getSecretNames" . }}"
+      {{- end }}
+      {{- if $.Values.secretReloader.auto }}
+    reloader.stakater.com/auto: "true"
+      {{- end }}
+    {{- end }}
+spec:
+  replicas: {{ $.Values.replicas }}
+  strategy: {{- toYaml $.Values.updateStrategy | nindent 4 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/chart-name: {{ $.Chart.Name }}
+      app.kubernetes.io/release-name: {{ $.Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ $.Release.Name }} # duplicate release name only for work helm-assistant
+        app.kubernetes.io/chart-name: {{ $.Chart.Name }}
+        app.kubernetes.io/release-name: {{ $.Release.Name }}
+        app.metadata.io/version: {{ $.Chart.AppVersion | default $.Values.image.tag | trunc 63 }}
+        {{- if $.Values.podLabels }}
+        {{- include "common.tplvalues.render" (dict "value" $.Values.podLabels "context" $) | nindent 8 }}
+        {{- end }}
+      annotations:
+        imageId: {{ $.Values.image.id | quote }}
+        {{- range $item := $.Values.extraEnvVarsSecrets }}
+        checksum/externalSecret_{{ $item.name }}: {{ $item.checksum | quote  }}
+        {{- end }}
+        {{- if $.Values.podAnnotations }}
+        {{- include "common.tplvalues.render" (dict "value" $.Values.podAnnotations "context" $) | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- if $.Values.podSecurityContext.enabled }}
+      securityContext: {{- omit $.Values.podSecurityContext "enabled" | toYaml | nindent 8 }}
+      {{- end }}
+      {{- if $.Values.image.pullSecrets }}
+      imagePullSecrets: {{ toYaml $.Values.image.pullSecrets | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ $.Values.terminationGracePeriodSeconds }}
+      initContainers:
+        {{- range $job := $.Values.initApplication }}
+        - name: {{ $job.name }}
+          {{- with $.Values.image }}
+          image: "{{- if .registry -}}{{ .registry }}/{{ .repository }}{{ else }}{{ .repository }}{{- end -}}:{{ .tag }}{{- if (.digest) -}} @{{.digest}} {{- end -}}"
+          {{- end }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+
+          command: {{- include "common.cmd" (dict "value" $job.command "context" $) | nindent 12 }}
+          args: {{- include "common.cmd" (dict "value" $job.args "context" $) | nindent 12 }}
+
+          envFrom: {{- include "common.containerEnvVarsSecrets" (dict "value" $.Values.extraEnvVarsSecrets "context" $) | nindent 12 }}
+          env: {{- include "common.containerEnvVars" (dict "value" $.Values.extraEnvVars "context" $) | nindent 12 }}
+
+          {{- if $job.resources }}
+          resources: {{ toYaml $job.resources | nindent 12 }}
+          {{- end }}
+        {{- end }}
+        {{- if $.Values.initContainers }}
+        {{- include "common.tplvalues.render" ( dict "value" $.Values.initContainers "context" $) | nindent 10 }}
+        {{- end }}
+      containers:
+        - name: worker
+          {{- with $.Values.image }}
+          image: "{{- if .registry -}}{{ .registry }}/{{ .repository }}{{ else }}{{ .repository }}{{- end -}}:{{ .tag }}{{- if (.digest) -}} @{{.digest}} {{- end -}}"
+          {{- end }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+
+          {{- if $.Values.diagnosticMode.enabled }}
+          command: {{- include "common.cmd" (dict "value" $.Values.diagnosticMode.command "context" $) | nindent 12 }}
+          {{- else if $.Values.command }}
+          command: {{- include "common.cmd" (dict "value" $.Values.command "context" $) | nindent 12 }}
+          {{- end }}
+
+          {{- if $.Values.diagnosticMode.enabled }}
+          args: {{- include "common.cmd" (dict "value" $.Values.diagnosticMode.args "context" $) | nindent 12 }}
+          {{- else if $.Values.arguments }}
+          args: {{- include "common.cmd" (dict "value" $.Values.arguments "context" $) | nindent 12 }}
+          {{- end }}
+
+          envFrom:
+            {{- include "common.containerEnvVarsSecrets" (dict "value" $.Values.extraEnvVarsSecrets "context" $) | nindent 12 }}
+            {{- include "common.externalsecretEnvVarsSecrets" . | nindent 12 }}
+
+
+          env: {{- include "common.containerEnvVars" (dict "value" $.Values.extraEnvVars "context" $) | nindent 12 }}
+
+          {{- if $.Values.resources.enabled }}
+          resources: {{- omit $.Values.resources "enabled" "active" | toYaml | nindent 12 }}
+          {{- end }}
+
+          {{- if and (eq $.Values.containerSecurityContext.enabled true) (eq $.Values.containerSecurityContext.active true) }}
+          securityContext: {{- omit $.Values.containerSecurityContext "enabled" "active" | toYaml | nindent 12 }}
+          {{- end }}
+
+          {{- if and (eq $.Values.readinessProbe.enabled true) (eq $.Values.diagnosticMode.enabled false) }}
+          readinessProbe: {{- omit $.Values.readinessProbe "enabled"  | toYaml | nindent 12 }}
+          {{- end }}
+
+          {{- if and (eq $.Values.livenessProbe.enabled true) (eq $.Values.diagnosticMode.enabled false) }}
+          livenessProbe: {{- omit $.Values.livenessProbe "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+
+          {{- if and (eq $.Values.startupProbe.enabled true) (eq $.Values.diagnosticMode.enabled false) }}
+          startupProbe: {{- omit $.Values.startupProbe "enabled" | toYaml | nindent 12 }}
+          {{- end }}
+
+          lifecycle:
+            preStop:
+              exec:
+                command: {{- include "common.cmd" (dict "value" $.Values.lifecycle.preStop "context" $) | nindent 20 }}
+
+
+          volumeMounts:
+            {{- if $.Values.extraVolumeMounts }}
+            {{- include "common.tplvalues.render" ( dict "value" $.Values.extraVolumeMounts "context" $) | nindent 14 }}
+            {{- end }}
+
+        {{- if $.Values.sidecars }}
+        {{- include "common.tplvalues.render" (dict "value" $.Values.sidecars "context" $) | nindent 8 }}
+        {{- end }}
+
+      volumes:
+        {{- if $.Values.extraVolumes }}
+        {{- include "common.tplvalues.render" ( dict "value" $.Values.extraVolumes "context" $) | nindent 8 }}
+        {{- end }}
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 1
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/chart-name: {{ $.Chart.Name }}
+                    app.kubernetes.io/release-name: {{ $.Release.Name }}
+                topologyKey: kubernetes.io/hostname

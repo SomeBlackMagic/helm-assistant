@@ -1,0 +1,291 @@
+suite: Pod Spec test
+templates:
+  - templates/deployment.yaml
+release:
+  revision: 1
+  upgrade: true
+capabilities:
+  majorVersion: 1
+  minorVersion: 10
+  apiVersions:
+    - monitoring.coreos.com/v1
+chart:
+  version: 1.0.0
+  appVersion: 1.0.0
+values:
+  - 'baseValues/pod_base_config.yaml'
+
+tests:
+  - it: test container
+    set:
+      image.pullSecrets:
+        - name: docker-registry-auth-secret
+    asserts:
+      - isSubset:
+          path: spec.template.spec
+          any: true
+          content:
+            imagePullSecrets:
+              - name: docker-registry-auth-secret
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: "docker.io/path/to/docker/image:v1.0.0"
+      - equal:
+          path: spec.template.spec.containers[0].imagePullPolicy
+          value: "IfNotPresent"
+  - it: test diagnosticMode
+    set:
+      diagnosticMode.enabled: true
+    asserts:
+      - isSubset:
+          path: spec.template.spec.containers[0]
+          content:
+            args:
+              - infinity
+            command:
+              - sleep
+
+  - it: test extraEnvVarsSecrets
+    set:
+      extraEnvVarsSecrets:
+        - name: 'extraEnvVarsSecrets-name'
+          checksum: 'extraEnvVarsSecrets-checksum'
+      initApplication:
+        - name: 'initApplication-example'
+          command: 'ls'
+          args: '-la'
+
+    asserts:
+      - isSubset:
+          path: spec.template.spec.initContainers[0]
+          content:
+            envFrom:
+              - secretRef:
+                  name: extraEnvVarsSecrets-name
+      - isSubset:
+          path: spec.template.spec.containers[0]
+          content:
+            envFrom:
+              - secretRef:
+                  name: extraEnvVarsSecrets-name
+      - equal:
+          path: spec.template.metadata.annotations["checksum/externalSecret_extraEnvVarsSecrets-name"]
+          value: "extraEnvVarsSecrets-checksum"
+
+
+  - it: test initContainers
+    set:
+      initContainers:
+        - name: 'fooBarBaz'
+          image: 'docker.io/test-image:latest'
+          command: 'ls'
+          args: '-lah'
+    asserts:
+      - isSubset:
+          path: spec.template.spec.initContainers[0]
+          content:
+            name: 'fooBarBaz'
+            image: 'docker.io/test-image:latest'
+            command: 'ls'
+            args: '-lah'
+
+  - it: test initApplication
+    set:
+      image:
+        registry: docker.io
+        repository: path/to/docker/image
+        tag: v1.0.0
+        pullPolicy: IfNotPresent
+      initApplication:
+        - name: initApplicationItem
+          command: "bash"
+          args: "ls -lah"
+          resources:
+            requests:
+              cpu: "30m"
+              memory: 50Mi
+            limits:
+              cpu: "100m"
+              memory: 100Mi
+    asserts:
+      - isSubset:
+          path: spec.template.spec.initContainers[0]
+          content:
+            args:
+              - ls
+              - -lah
+            command:
+              - bash
+            env: null
+            envFrom: null
+            image: docker.io/path/to/docker/image:v1.0.0
+            imagePullPolicy: IfNotPresent
+            resources:
+              requests:
+                cpu: "30m"
+                memory: 50Mi
+              limits:
+                cpu: "100m"
+                memory: 100Mi
+
+  - it: test extraEnvVars
+    set:
+      initApplication:
+        - name: initApplicationItem
+
+      extraEnvVars:
+        APP_FOO: bar
+    asserts:
+      - isSubset:
+          path: spec.template.spec.initContainers[0]
+          content:
+            env:
+              - name: APP_FOO
+                value: bar
+      - isSubset:
+          path: spec.template.spec.containers[0]
+          content:
+            env:
+              - name: APP_FOO
+                value: bar
+
+  - it: test resources
+    set:
+      resources:
+        enabled: true
+        requests:
+            cpu: 300m
+            memory: 300Mi
+        limits:
+            cpu: 200m
+            memory: 1000Mi
+    asserts:
+      - isSubset:
+          path: spec.template.spec.containers[0].resources
+          content:
+            requests:
+              cpu: 300m
+              memory: 300Mi
+            limits:
+              cpu: 200m
+              memory: 1000Mi
+
+  - it: test podSecurityContext
+    set:
+      podSecurityContext:
+        enabled: true
+        runAsNonRoot: false
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+    asserts:
+      - isSubset:
+          path: spec.template.spec.securityContext
+          content:
+            fsGroup: 1000
+            runAsGroup: 1000
+            runAsNonRoot: false
+            runAsUser: 1000
+
+  - it: test containerSecurityContext
+    set:
+      containerSecurityContext:
+        enabled: true
+        active: true
+        runAsUser: 1000
+        runAsNonRoot: true
+        readOnlyRootFilesystem: false
+
+    asserts:
+      - isSubset:
+          path: spec.template.spec.containers[0].securityContext
+          content:
+            readOnlyRootFilesystem: false
+            runAsNonRoot: true
+            runAsUser: 1000
+
+  - it: test terminationGracePeriodSeconds
+    set:
+      terminationGracePeriodSeconds: 10
+    asserts:
+      - equal:
+          path: spec.template.spec.terminationGracePeriodSeconds
+          value: 10
+
+  - it: test podLabels
+    set:
+      podLabels:
+        app.foo.bar/labels: true
+    asserts:
+      - equal:
+          path: spec.template.metadata.labels["app.foo.bar/labels"]
+          value: true
+
+  - it: test podAnnotations
+    set:
+      podAnnotations:
+        app.foo.bar/annotations: true
+    asserts:
+      - equal:
+          path: spec.template.metadata.annotations["app.foo.bar/annotations"]
+          value: true
+
+  - it: test lifecycle
+    set:
+      lifecycle:
+        preStop:
+          - /bin/bash
+          - -e
+          - ls
+    asserts:
+      - isSubset:
+          path: spec.template.spec.containers[0]
+          content:
+            lifecycle:
+              preStop:
+                exec:
+                  command:
+                    - /bin/bash
+                    - -e
+                    - ls
+
+  - it: test sidecars
+    set:
+      sidecars:
+        - name: foo
+          image: "docker.io/test-demo/image: latest"
+    asserts:
+      - isSubset:
+          path: spec.template.spec.containers[1]
+          content:
+            name: foo
+            image: 'docker.io/test-demo/image: latest'
+
+
+  - it: test extraVolumes
+    set:
+      extraVolumes:
+        - name: shared-media-data
+          persistentVolumeClaim:
+            claimName: ~
+    asserts:
+      - isSubset:
+          path: spec.template.spec.volumes[0]
+          content:
+               name: shared-media-data
+               persistentVolumeClaim:
+                 claimName: ~
+
+  - it: test extraVolumeMounts
+    set:
+      extraVolumeMounts:
+        - name: testing
+          mountPath: /var/lib/testing
+          readOnly: false
+    asserts:
+      - isSubset:
+          path: spec.template.spec.containers[0].volumeMounts[0]
+          content:
+             name: testing
+             mountPath: /var/lib/testing
+             readOnly: false

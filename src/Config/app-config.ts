@@ -18,8 +18,6 @@ export class ConfigFactory {
             HELM_ASSISTANT_RELEASE_LOCK_DRIVER: '',
             HELM_BIN_PATH:  env('HELM_BIN_PATH', 'helm'),
             HELM_CMD_ARGS: env('HELM_CMD_ARGS', ''),
-            HELM_CACHE_HOME: env('HELM_CACHE_HOME', ''),
-            HELM_CONFIG_HOME: env('HELM_CONFIG_HOME', ''),
             KUBECTL_BIN_PATH: env('KUBECTL_BIN_PATH', 'kubectl'),
             KUBECTL_CMD_ARGS: env('KUBECTL_CMD_ARGS', ''),
             HELM_DEBUG: envBoolean('HELM_DEBUG', false),
@@ -46,8 +44,6 @@ interface CoreConfigInterface {
     LOGGER_DRIVER: string;
     HELM_BIN_PATH: string;
     HELM_CMD_ARGS: string;
-    HELM_CACHE_HOME: string;
-    HELM_CONFIG_HOME: string;
     KUBECTL_BIN_PATH: string;
     KUBECTL_CMD_ARGS: string;
     HELM_DEBUG: boolean;

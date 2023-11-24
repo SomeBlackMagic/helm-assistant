@@ -1,0 +1,186 @@
+metadata:
+  deployedBy: null-value
+  pipelineUrl: null-value
+
+replicas: 1
+
+image:
+  registry: ~
+  repository: ~
+  tag: master
+  pullPolicy: Always
+  pullSecrets: []
+  id: ~
+
+## Enable diagnostic mode in the deployment
+##
+diagnosticMode:
+  ## @param diagnosticMode.enabled Enable diagnostic mode (all probes will be disabled and the command will be overridden)
+  ##
+  enabled: false
+  ## @param diagnosticMode.command Command to override all containers in the deployment
+  ##
+  command:
+    - sleep
+  ## @param diagnosticMode.args Args to override all containers in the deployment
+  ##
+  args:
+    - infinity
+
+# command: "kubectl"
+# arguments: "get pods"
+# arguments:
+#   - get
+#   - pods
+
+
+## @param initApplication
+## For example:
+##  - name: create-cache
+##    command: "bash"
+##    args: "ls -lah"
+##    resources:
+##      requests:
+##        cpu: "30m"
+##        memory: 50Mi
+##      limits:
+##        cpu: "100m"
+##        memory: 100Mi
+initApplication: []
+
+
+## @param extraEnvVarsSecret Name of existing Secret containing extra env vars for app nodes
+## For example:
+##  - name: secret-name
+##    checksum: sha256sum-value
+##
+extraEnvVarsSecrets: []
+
+initContainers: []
+
+extraEnvVars: {}
+
+## @param master.updateStrategy.type Redis&trade; master statefulset strategy type
+## @skip master.updateStrategy.rollingUpdate
+## ref: https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies
+##
+updateStrategy:
+  ## StrategyType
+  ## Can be set to RollingUpdate or OnDelete
+  ##
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 20%
+    maxSurge: 1
+
+resources:
+  enabled: false
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  limits: {}
+#    limits:
+#        cpu: 200m
+#        memory: 1000Mi
+  requests: {}
+#    requests:
+#        cpu: 300m
+#        memory: 300Mi
+
+livenessProbe:
+  enabled: false
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 1
+  failureThreshold: 3
+  successThreshold: 1
+
+readinessProbe:
+  enabled: false
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 1
+  failureThreshold: 10
+  successThreshold: 1
+  exec:
+    command:
+      - cat
+      - /var/lock/ready.lock
+
+startupProbe:
+  enabled: false
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 1
+  failureThreshold: 60
+  successThreshold: 1
+
+autoscaling:
+  active: false
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetMemoryUtilizationPercentage: ~
+  targetCPUUtilizationPercentage: ~
+  externalMetric:
+    rabbitmq:
+      enabled: false
+      vhost: ~
+      queue: ~
+      namespace: ~
+      value: 1
+
+podSecurityContext:
+  enabled: false
+  active: false
+  runAsNonRoot: false
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  enabled: false
+  active: false
+  runAsUser: 1000
+  runAsNonRoot: true
+  readOnlyRootFilesystem: false
+
+terminationGracePeriodSeconds: 30
+
+## @param podLabels Extra labels for %%MAIN_CONTAINER_NAME%% pods
+## ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+##
+podLabels: {}
+## @param podAnnotations Annotations for %%MAIN_CONTAINER_NAME%% pods
+## ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+##
+podAnnotations: {}
+
+lifecycle:
+  preStop:
+    - /bin/sh
+    - -c
+    - echo "Stopping container by k8s...">/proc/1/fd/1 && /bin/kill -QUIT 1
+
+## @param sidecars Add additional sidecar containers for the pod(s)
+##
+sidecars: []
+
+extraVolumeMounts: []
+
+extraVolumes: []
+
+secretReloader:
+  enabled: false
+  auto: false
+  watchExternalSecrets: false
+
+externalSecret:
+  enabled: false
+  refreshInterval: 30s
+  secretStoreRef:
+    name: ~
+    kind: ClusterSecretStore
+  targetSecretName: ~
+  dataFrom: []

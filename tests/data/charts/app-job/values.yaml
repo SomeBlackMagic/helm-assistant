@@ -1,0 +1,120 @@
+metadata:
+  deployedBy: null-value
+  pipelineUrl: null-value
+
+image:
+  registry: ~
+  repository: ~
+  tag: master
+  pullPolicy: Always
+  pullSecrets: []
+  id: ~
+
+
+## Enable diagnostic mode in the deployment
+##
+diagnosticMode:
+  ## @param diagnosticMode.enabled Enable diagnostic mode (all probes will be disabled and the command will be overridden)
+  ##
+  enabled: false
+  ## @param diagnosticMode.command Command to override all containers in the deployment
+  ##
+  command:
+    - sleep
+  ## @param diagnosticMode.args Args to override all containers in the deployment
+  ##
+  args:
+    - infinity
+
+## @param initApplication
+## For example:
+##  - name: create-cache
+##    command: "bash"
+##    args: "ls -lah"
+##    resources:
+##      requests:
+##        cpu: "30m"
+##        memory: 50Mi
+##      limits:
+##        cpu: "100m"
+##        memory: 100Mi
+initApplication: []
+
+## @param extraEnvVarsSecret Name of existing Secret containing extra env vars for app nodes
+## For example:
+##  - name: secret-name
+##    checksum: sha256sum-value
+##
+extraEnvVarsSecrets: []
+
+initContainers: []
+
+extraEnvVars: {}
+
+job:
+  name: job
+  idAutoGenerate: false
+  command: ''
+  arguments: ''
+  backoffLimit: 4
+  parallelism: 1
+  ttlSecondsAfterFinished: 7200
+  activeDeadlineSeconds: 100
+  completions: 1
+
+resources:
+  enabled: true
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  requests: {}
+  #    requests:
+  #        cpu: 300m
+  #        memory: 300Mi
+  limits: {}
+  #    limits:
+  #        cpu: 200m
+  #        memory: 1000Mi
+
+podSecurityContext:
+  enabled: false
+  runAsNonRoot: false
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  enabled: false
+  runAsUser: 1000
+  runAsNonRoot: true
+  readOnlyRootFilesystem: false
+
+terminationGracePeriodSeconds: 30
+restartPolicy: OnFailure
+
+## @param podLabels Extra labels for  pods
+## ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+##
+podLabels: {}
+## @param podAnnotations Annotations for  pods
+## ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+##
+podAnnotations: {}
+
+## @param extraVolumes Optionally specify extra list of additional volumes for the  pod(s)
+##
+extraVolumes: []
+## @param extraVolumeMounts Optionally specify extra list of additional volumeMounts for the  container(s)
+##
+extraVolumeMounts: []
+
+lifecycle:
+  preStop:
+    - /bin/sh
+    - -c
+    - echo "Stopping container by k8s...">/proc/1/fd/1 && /bin/kill -QUIT 1
+
+## @param sidecars Add additional sidecar containers for the pod(s)
+##
+sidecars: []
