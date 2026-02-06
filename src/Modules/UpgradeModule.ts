@@ -5,43 +5,25 @@ import ProcessLocker from '../Components/ProcessLocker';
 import * as console from 'console';
 import Logger from '../Components/Logger';
 import {SubProcessTracer} from '../Components/SubProcessTracer';
+import {IModule, IProcessLocker, ParsedCliArgs} from '../Types';
 
 const cliColor = require('cli-color');
 
-export class UpgradeModule {
-    private isWork: boolean = false; // for detect is module active on stop application
+export class UpgradeModule implements IModule {
+    public readonly name: string = 'upgrade';
+    private isWork: boolean = false;
     private isExit: boolean = false;
     private subProcesses: { [n: string]: ChildProcessWithoutNullStreams } = {};
     private releaseName: string = '';
     private namespace: string = '';
     private timeouts: NodeJS.Timeout[] = [];
     private intervals: any[] = [];
-    private lockComponent: ProcessLocker = new ProcessLocker();
+    private lockComponent: IProcessLocker = new ProcessLocker();
 
-    public async run(cliArgs: any): Promise<any> {
+    public async run(cliArgs: ParsedCliArgs): Promise<void> {
         this.isWork = true;
-        // if (ConfigFactory.getCore().HELM_ASSISTANT_DEBUG === true && ConfigFactory.getCore().HELM_ASSISTANT_DEBUG_LEVEL >= 3) {
-        //     const tracer = setInterval(() => {
-        //         // this.subProcesses
-        //         for (const [key, value] of Object.entries(this.subProcesses)) {
-        //             Logger.trace('UpgradeModule', `${key}: ${value.pid}`);
-        //         }
-        //
-        //
-        //         if (Object.entries(this.subProcesses).length === 0 && this.isExit) {
-        //             Logger.trace('UpgradeModule', 'All subProcesses stop.');
-        //             clearInterval(tracer);
-        //         }
-        //     }, 500);
-        // }
-        this.releaseName = cliArgs._[1];
-        if (typeof cliArgs.namespace !== 'undefined') {
-            this.namespace = cliArgs.namespace;
-        } else if (typeof cliArgs.n !== 'undefined') {
-            this.namespace = cliArgs.n;
-        } else {
-            this.namespace = 'default';
-        }
+        this.releaseName = cliArgs.releaseName || '';
+        this.namespace = cliArgs.namespace || 'default';
 
         if (ConfigFactory.getCore().HELM_ASSISTANT_RELEASE_LOCK_ENABLED === true) {
             await this.lockComponent.getLock(this.namespace + '-' + this.releaseName);
@@ -57,7 +39,7 @@ export class UpgradeModule {
         }
     }
 
-    public async stop(): Promise<any> {
+    public async stop(): Promise<void> {
         if (this.isWork === false) {
             return Promise.resolve();
         }
@@ -95,7 +77,7 @@ export class UpgradeModule {
                 });
             });
         });
-        return await Promise.all(promises);
+        await Promise.all(promises);
     }
 
     private async kubectlWatchPods() {

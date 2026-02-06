@@ -1,13 +1,15 @@
 import {ConfigFactory} from '../Config/app-config';
 import Logger from '../Components/Logger';
+import {IModule, ParsedCliArgs} from '../Types';
 
-const cliColor = require('cli-color');
+export class VersionModule implements IModule {
+    public readonly name: string = 'version';
 
-export class VersionModule {
-    public async run(cliArgs: any): Promise<any> {
+    public async run(cliArgs: ParsedCliArgs): Promise<void> {
         Logger.info('VersionModule', 'Installed version:', [ConfigFactory.getBase().version]);
-        return Promise.resolve();
-
     }
 
+    public async stop(): Promise<void> {
+        // No-op for version module
+    }
 }
