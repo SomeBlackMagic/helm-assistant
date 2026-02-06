@@ -1,18 +1,35 @@
 import {env, envBoolean, envNumber} from '../Helpers';
+import {IConfigProvider, CoreConfig, AppInfo} from '../Types';
 import * as os from 'os';
 
 
-export class ConfigFactory {
+export class ConfigFactory implements IConfigProvider {
+
+    private static instance: ConfigFactory;
+
+    public static getInstance(): ConfigFactory {
+        if (!ConfigFactory.instance) {
+            ConfigFactory.instance = new ConfigFactory();
+        }
+        return ConfigFactory.instance;
+    }
 
     public static getBase(): AppInfo {
+        return ConfigFactory.getInstance().getBase();
+    }
+
+    public static getCore(): CoreConfig {
+        return ConfigFactory.getInstance().getCore();
+    }
+
+    public getBase(): AppInfo {
         return {
             id: 'helm-assistant',
             version: 'dev-dirty',
         };
     }
 
-
-    public static getCore(): CoreConfigInterface {
+    public getCore(): CoreConfig {
         return {
             LOGGER_DRIVER: env('HELM_ASSISTANT_LOGGER_DRIVER', 'console'),
             HELM_ASSISTANT_RELEASE_LOCK_DRIVER: '',
@@ -32,29 +49,4 @@ export class ConfigFactory {
             HELM_ASSISTANT_RELEASE_LOCK_FS_DIR_PATH: env('HELM_ASSISTANT_RELEASE_LOCK_FS_DIR_PATH', os.homedir() + '/.resource_lock')
         };
     }
-}
-
-
-interface AppInfo {
-    id: string;
-    version: string;
-}
-
-interface CoreConfigInterface {
-    LOGGER_DRIVER: string;
-    HELM_BIN_PATH: string;
-    HELM_CMD_ARGS: string;
-    KUBECTL_BIN_PATH: string;
-    KUBECTL_CMD_ARGS: string;
-    HELM_DEBUG: boolean;
-    HELM_DRY_RUN: boolean;
-    HELM_ASSISTANT_DEBUG: boolean;
-    HELM_ASSISTANT_DEBUG_LEVEL: number;
-    HELM_ASSISTANT_UPGRADE_PIPE_LOGS: boolean;
-    HELM_ASSISTANT_UPGRADE_PIPE_LOGS_TAIL_LINES: number;
-    HELM_ASSISTANT_UPGRADE_JOB_STRICT: boolean;
-    HELM_ASSISTANT_RELEASE_LOCK_ENABLED: boolean;
-    HELM_ASSISTANT_RELEASE_LOCK_MAX_RETRIES: number;
-    HELM_ASSISTANT_RELEASE_LOCK_DRIVER: string;
-    HELM_ASSISTANT_RELEASE_LOCK_FS_DIR_PATH: string;
 }

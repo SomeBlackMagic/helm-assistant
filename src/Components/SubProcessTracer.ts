@@ -1,17 +1,15 @@
 import Logger from './Logger';
-import {ChildProcessWithoutNullStreams} from 'child_process';
+import {ILogger} from '../Types';
+import {ChildProcessWithoutNullStreams, ChildProcess} from 'child_process';
 import * as process from 'process';
 
 export class SubProcessTracer {
     private static instance: SubProcessTracer;
-    private logger: Logger;
-    private processList: { [n: number]: ChildProcessWithoutNullStreams } = {};
+    private logger: ILogger;
+    private processList: { [n: number]: ChildProcessWithoutNullStreams | ChildProcess } = {};
     private processListPrintInterval: NodeJS.Timer | null = null;
     private shutdown: boolean = false;
-    /**
-     * The Singleton's constructor should always be private to prevent direct
-     * construction calls with the `new` operator.
-     */
+
     private constructor() {
         this.logger = Logger.getInstance('SubProcessTracer');
         process.on('message', () => {
@@ -20,12 +18,6 @@ export class SubProcessTracer {
         this.displaySubProcess();
     }
 
-    /**
-     * The static method that controls the access to the singleton instance.
-     *
-     * This implementation let you subclass the Singleton class while keeping
-     * just one instance of each subclass around.
-     */
     public static getInstance(): SubProcessTracer {
         if (!SubProcessTracer.instance) {
             SubProcessTracer.instance = new SubProcessTracer();
@@ -34,12 +26,12 @@ export class SubProcessTracer {
         return SubProcessTracer.instance;
     }
 
-    public watch(stream) {
+    public watch(stream: ChildProcessWithoutNullStreams | ChildProcess) {
         this.processList[stream.pid] = stream;
-        if ('spawnargs' in stream) {
+        if (stream.spawnargs) {
             this.logger.trace('Spawn new process: [' + stream.pid + '] ' + stream.spawnargs.join(' '));
         } else {
-            this.logger.trace('Spawn new process: [' + stream.pid + '] ' + stream.argv.join(' '));
+            this.logger.trace('Spawn new process: [' + stream.pid + ']');
         }
 
         stream.on('beforeExit', () => {this.logger.trace( '[' + stream.pid + ']' + ' send => beforeExit'); });

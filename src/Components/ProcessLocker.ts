@@ -1,11 +1,8 @@
 import * as fs from 'fs';
 import { ConfigFactory } from '../Config/app-config';
-import * as console from 'console';
-// import { NodeJS } from 'timers';
+import { IProcessLocker, ProcessLockerOptions } from '../Types';
 
-export default class ProcessLocker {
-
-    private driver: 'fs' | 'redis';
+export default class ProcessLocker implements IProcessLocker {
 
     public options: ProcessLockerOptions;
 
@@ -18,11 +15,12 @@ export default class ProcessLocker {
             fsDirPath: ConfigFactory.getCore().HELM_ASSISTANT_RELEASE_LOCK_FS_DIR_PATH
         };
     }
+
     public async getLock(resource: string): Promise<boolean> {
         await this.initFSLocker();
         return await this.waitAvailability(resource);
-
     }
+
     public clearLock(resource: string): Promise<any> {
         return new Promise(function(resolve, reject) {
             if (fs.existsSync(this.options.fsDirPath + '/' + resource + '.lock')) {
@@ -44,12 +42,12 @@ export default class ProcessLocker {
         }.bind(this));
     }
 
-    private initFSLocker():  Promise<any> {
-        const res = fs.mkdirSync(this.options.fsDirPath, {recursive: true});
+    private initFSLocker(): Promise<void> {
+        fs.mkdirSync(this.options.fsDirPath, {recursive: true});
         return Promise.resolve();
     }
 
-    private async waitAvailability(key:string): Promise<boolean> {
+    private async waitAvailability(key: string): Promise<boolean> {
         return new Promise<boolean>((resolve, reject) => {
             process.stdout.write('[helm-assistant][release-locker] NOTICE: Waiting for lock on: ' + this.options.fsDirPath + '/' + key + '.lock' + '\n');
             this.timer = setInterval(() => {
@@ -75,12 +73,13 @@ export default class ProcessLocker {
         });
     }
 
-    private getLockData(key: string):  string | false {
+    private getLockData(key: string): string | false {
         if (fs.existsSync(this.options.fsDirPath + '/' + key + '.lock')) {
             return fs.readFileSync(this.options.fsDirPath + '/' + key + '.lock', 'utf8');
         }
         return false;
     }
+
     private putLockData(key: string): Promise<boolean> {
         const date = new Date();
         date.setSeconds(date.getSeconds() + this.options.maxRetries);
@@ -96,10 +95,4 @@ export default class ProcessLocker {
             }.bind(this));
         }.bind(this));
     }
-
-}
-interface ProcessLockerOptions {
-    maxRetries: number;
-    driver: string;
-    fsDirPath: string;
 }
