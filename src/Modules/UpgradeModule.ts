@@ -182,6 +182,7 @@ export class UpgradeModule {
 
     private async watchJobStatus() {
         Logger.info('UpgradeModule:watchJobStatus', 'Start watch for jobs status', {namespace: this.namespace, releaseName: this.releaseName});
+        const watchStartedAt = new Date();
         const newProcessArgs: string[] =
             [
                 ...ConfigFactory.getCore().KUBECTL_CMD_ARGS.split(' '),
@@ -215,6 +216,11 @@ export class UpgradeModule {
                     return;
                 }
                 resultJson.items.forEach((jobItem: any) => {
+                    const creationTimestamp = jobItem?.metadata?.creationTimestamp;
+                    if (typeof creationTimestamp === 'string' && new Date(creationTimestamp) < watchStartedAt) {
+                        Logger.trace('UpgradeModule:watchJobStatus', 'Skip stale job created before this upgrade started', {job: jobItem?.metadata?.name});
+                        return;
+                    }
                     if (typeof jobItem?.status?.conditions !== 'undefined') {
                         jobItem.status.conditions.forEach((item: any) => {
                             if (item.type === 'Failed' && item.status === 'True') {
