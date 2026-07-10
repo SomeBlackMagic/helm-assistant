@@ -217,7 +217,7 @@ export class UpgradeModule {
                 resultJson.items.forEach((jobItem: any) => {
                     if (typeof jobItem?.status?.conditions !== 'undefined') {
                         jobItem.status.conditions.forEach((item: any) => {
-                            if (item.type === 'Failed') {
+                            if (item.type === 'Failed' && item.status === 'True') {
                                 Logger.info('UpgradeModule:watchJobStatus', 'Job is failed. Exit!', {});
                                 process.exitCode = 1;
                                 process.emit('SIGTERM');
