@@ -216,7 +216,11 @@ export class UpgradeModule {
                         Logger.info('UpgradeModule:watchJobStatus', 'Jobs not found in release. Wait for job');
                         return;
                     }
+                    let failedJobDetected = false;
                     resultJson.items.forEach((jobItem: any) => {
+                        if (failedJobDetected) {
+                            return;
+                        }
                         const creationTimestamp = jobItem?.metadata?.creationTimestamp;
                         if (typeof creationTimestamp === 'string' && new Date(creationTimestamp) < watchStartedAt) {
                             Logger.trace('UpgradeModule:watchJobStatus', 'Skip stale job created before this upgrade started', {job: jobItem?.metadata?.name});
@@ -230,7 +234,11 @@ export class UpgradeModule {
                         // simpler and safer to rely on.
                         if (typeof jobItem?.status?.conditions !== 'undefined') {
                             jobItem.status.conditions.forEach((item: any) => {
+                                if (failedJobDetected) {
+                                    return;
+                                }
                                 if (item.type === 'Failed' && item.status === 'True') {
+                                    failedJobDetected = true;
                                     Logger.info('UpgradeModule:watchJobStatus', 'Job is failed. Exit!', {
                                         job: jobItem?.metadata?.name,
                                         reason: item.reason,
