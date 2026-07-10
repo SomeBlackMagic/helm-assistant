@@ -3,7 +3,8 @@
   "scripts": {
     "build": "tsc && sh .github/set_version.sh && pkg --compress GZip dist/App.js -o helm-assistant && chmod +x helm-assistant",
     "lint": "tslint -c tslint.json \"./src/**/*.ts\"",
-    "lint-fix": "tslint --fix -c tslint.json \"./src/**/*.ts\""
+    "lint-fix": "tslint --fix -c tslint.json \"./src/**/*.ts\"",
+    "test": "mocha -r ts-node/register -r tsconfig-paths/register --extension ts \"test/**/*.spec.ts\""
   },
   "author": "",
   "license": "ISC",

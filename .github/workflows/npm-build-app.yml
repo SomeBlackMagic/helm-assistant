@@ -23,6 +23,9 @@ jobs:
     - name: Run lint code
       run: yarn run lint
 
+    - name: Run unit tests
+      run: yarn run test
+
     - name: Compile application to binary
       run: yarn run build
 
