@@ -310,7 +310,7 @@ export class UpgradeModule {
 
             if (wait === true) {
                 process.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
-                    if ((code === 0 || code === 1) && wait === true) {
+                    if (code === 0) {
                         resolve(stdout);
                     } else if (signal === 'SIGINT') {
                         resolve('{}');
