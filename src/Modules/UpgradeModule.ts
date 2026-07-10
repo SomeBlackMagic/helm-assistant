@@ -222,6 +222,12 @@ export class UpgradeModule {
                             Logger.trace('UpgradeModule:watchJobStatus', 'Skip stale job created before this upgrade started', {job: jobItem?.metadata?.name});
                             return;
                         }
+                        // Deliberately not using status.failed/status.succeeded counters here: they can
+                        // increment on individual pod retries before backoffLimit is exhausted, and
+                        // re-deriving "is this terminal" from counters + backoffLimit would duplicate
+                        // (and could race with) the Job controller's own logic. status.conditions is
+                        // set by the controller as soon as it reaches a terminal state, so it's both
+                        // simpler and safer to rely on.
                         if (typeof jobItem?.status?.conditions !== 'undefined') {
                             jobItem.status.conditions.forEach((item: any) => {
                                 if (item.type === 'Failed' && item.status === 'True') {
