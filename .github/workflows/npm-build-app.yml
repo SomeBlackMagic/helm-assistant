@@ -81,3 +81,10 @@ jobs:
           export HELM_ASSISTANT_BIN_CMD="./helm-assistant"
           export TESTS_PWD=$(pwd)/tests/
           bash tests/deploy_job.sh
+
+      - name: Run test -> deploy_job_failed
+        run: |
+          chmod +x helm-assistant
+          export HELM_ASSISTANT_BIN_CMD="./helm-assistant"
+          export TESTS_PWD=$(pwd)/tests/
+          bash tests/deploy_job_failed.sh

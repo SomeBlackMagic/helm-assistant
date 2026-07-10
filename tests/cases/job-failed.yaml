@@ -1,0 +1,23 @@
+image:
+  registry: docker.io
+  repository: someblackmagic/helm-assistant
+  tag: image-for-run-tests
+  pullPolicy: IfNotPresent
+  id: 123123124
+
+job:
+  idAutoGenerate: true
+  command: 'bash'
+  arguments: '/test.sh'
+
+  backoffLimit: 0
+  parallelism: 1
+  ttlSecondsAfterFinished: 10
+  completions: 1
+  activeDeadlineSeconds: 60
+
+
+extraEnvVars:
+  APP_WHILE_COUNT: 1
+  APP_SLEEP_TIME: 1
+  APP_EXIT_CODE: 1
