@@ -5,8 +5,71 @@ import ProcessLocker from '../Components/ProcessLocker';
 import * as console from 'console';
 import Logger from '../Components/Logger';
 import {SubProcessTracer} from '../Components/SubProcessTracer';
+import {V1Job, V1JobList} from '../Kubernetes/JobTypes';
 
 const cliColor = require('cli-color');
+
+export interface JobWatchDecision {
+    failed: boolean;
+    jobName?: string;
+    reason?: string;
+    message?: string;
+}
+
+/**
+ * Pure decision function: given the Jobs matched by the release selector and the
+ * time the watcher started, decide whether any of them has terminally failed.
+ * Deliberately has no I/O and no side effects so it can be unit tested with
+ * hand-written fixtures instead of a real kubectl/cluster.
+ */
+export function evaluateJobItems(items: V1Job[], watchStartedAt: Date): JobWatchDecision {
+    for (const jobItem of items) {
+        const creationTimestamp = jobItem.metadata.creationTimestamp;
+        if (typeof creationTimestamp === 'string' && new Date(creationTimestamp) < watchStartedAt) {
+            // Job existed before this upgrade started (e.g. left over, not yet
+            // garbage-collected, from a previous release) - not ours to react to.
+            continue;
+        }
+        const conditions = jobItem.status?.conditions ?? [];
+        for (const condition of conditions) {
+            // Deliberately not using status.failed/status.succeeded counters here: they can
+            // increment on individual pod retries before backoffLimit is exhausted, and
+            // re-deriving "is this terminal" from counters + backoffLimit would duplicate
+            // (and could race with) the Job controller's own logic. status.conditions is
+            // set by the controller as soon as it reaches a terminal state, so it's both
+            // simpler and safer to rely on.
+            if (condition.type === 'Failed' && condition.status === 'True') {
+                return {
+                    failed: true,
+                    jobName: jobItem.metadata.name,
+                    reason: condition.reason,
+                    message: condition.message,
+                };
+            }
+        }
+    }
+    return {failed: false};
+}
+
+export type ChildProcessExitOutcome =
+    | {kind: 'success'; stdout: string}
+    | {kind: 'resolved-empty'}
+    | {kind: 'error'; error: Error};
+
+/**
+ * Pure decision function for how createChildProcess should settle its promise
+ * once the underlying process exits, isolated from spawn() so it is unit
+ * testable without a real child process.
+ */
+export function interpretChildProcessExit(code: number | null, signal: NodeJS.Signals | null, stdout: string): ChildProcessExitOutcome {
+    if (code === 0) {
+        return {kind: 'success', stdout};
+    }
+    if (signal === 'SIGINT') {
+        return {kind: 'resolved-empty'};
+    }
+    return {kind: 'error', error: new Error('command failed. Code: ' + code)};
+}
 
 export class UpgradeModule {
     private isWork: boolean = false; // for detect is module active on stop application
@@ -15,7 +78,7 @@ export class UpgradeModule {
     private releaseName: string = '';
     private namespace: string = '';
     private timeouts: NodeJS.Timeout[] = [];
-    private intervals: any[] = [];
+    private intervals: NodeJS.Timeout[] = [];
     private lockComponent: ProcessLocker = new ProcessLocker();
 
     public async run(cliArgs: any): Promise<any> {
@@ -194,17 +257,17 @@ export class UpgradeModule {
         this.intervals.push(setInterval(() => {
             (async () => {
                 try {
-                    const result = await this.createChildProcess(ConfigFactory.getCore().KUBECTL_BIN_PATH, newProcessArgs, true, true);
+                    const result: string = await this.createChildProcess(ConfigFactory.getCore().KUBECTL_BIN_PATH, newProcessArgs, true, true);
                     if (result === '') {
                         Logger.info('UpgradeModule:watchJobStatus', 'Job not found in release. Wait for job');
                         return;
                     }
 
-                    let resultJson: any = {};
+                    let resultJson: Partial<V1JobList> = {};
                     try {
-                        resultJson = JSON.parse(result);
+                        resultJson = JSON.parse(result) as V1JobList;
                     } catch (e) {
-                        Logger.fatal('UpgradeModule', 'Can not parse JSON output.', result);
+                        Logger.fatal('UpgradeModule', 'Can not parse JSON output.', {result});
                         return;
                     }
 
@@ -212,48 +275,23 @@ export class UpgradeModule {
                         Logger.warn('UpgradeModule:watchJobStatus', 'Empty result from kube api');
                         return;
                     }
-                    if (resultJson.items.length === 0) {
+                    if (resultJson.items === undefined || resultJson.items.length === 0) {
                         Logger.info('UpgradeModule:watchJobStatus', 'Jobs not found in release. Wait for job');
                         return;
                     }
-                    let failedJobDetected = false;
-                    resultJson.items.forEach((jobItem: any) => {
-                        if (failedJobDetected) {
-                            return;
-                        }
-                        const creationTimestamp = jobItem?.metadata?.creationTimestamp;
-                        if (typeof creationTimestamp === 'string' && new Date(creationTimestamp) < watchStartedAt) {
-                            Logger.trace('UpgradeModule:watchJobStatus', 'Skip stale job created before this upgrade started', {job: jobItem?.metadata?.name});
-                            return;
-                        }
-                        // Deliberately not using status.failed/status.succeeded counters here: they can
-                        // increment on individual pod retries before backoffLimit is exhausted, and
-                        // re-deriving "is this terminal" from counters + backoffLimit would duplicate
-                        // (and could race with) the Job controller's own logic. status.conditions is
-                        // set by the controller as soon as it reaches a terminal state, so it's both
-                        // simpler and safer to rely on.
-                        if (typeof jobItem?.status?.conditions !== 'undefined') {
-                            jobItem.status.conditions.forEach((item: any) => {
-                                if (failedJobDetected) {
-                                    return;
-                                }
-                                if (item.type === 'Failed' && item.status === 'True') {
-                                    failedJobDetected = true;
-                                    Logger.info('UpgradeModule:watchJobStatus', 'Job is failed. Exit!', {
-                                        job: jobItem?.metadata?.name,
-                                        reason: item.reason,
-                                        message: item.message,
-                                    });
-                                    process.exitCode = 1;
-                                    process.emit('SIGTERM');
-                                }
-                            });
-                        } else {
-                            Logger.trace('UpgradeModule:watchJobStatus', 'Conditions not found in Job');
-                        }
-                    });
+
+                    const decision = evaluateJobItems(resultJson.items, watchStartedAt);
+                    if (decision.failed) {
+                        Logger.info('UpgradeModule:watchJobStatus', 'Job is failed. Exit!', {
+                            job: decision.jobName,
+                            reason: decision.reason,
+                            message: decision.message,
+                        });
+                        process.exitCode = 1;
+                        process.emit('SIGTERM');
+                    }
                 } catch (e) {
-                    Logger.error('UpgradeModule:watchJobStatus', 'Failed to poll job status from kube api', {error: e?.message});
+                    Logger.error('UpgradeModule:watchJobStatus', 'Failed to poll job status from kube api', {error: e instanceof Error ? e.message : String(e)});
                 }
             })();
         }, 1000));
@@ -324,12 +362,17 @@ export class UpgradeModule {
 
             if (wait === true) {
                 process.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
-                    if (code === 0) {
-                        resolve(stdout);
-                    } else if (signal === 'SIGINT') {
-                        resolve('{}');
-                    } else {
-                        reject(new Error('command failed. Code: ' + code));
+                    const outcome = interpretChildProcessExit(code, signal, stdout);
+                    switch (outcome.kind) {
+                        case 'success':
+                            resolve(outcome.stdout);
+                            break;
+                        case 'resolved-empty':
+                            resolve('{}');
+                            break;
+                        case 'error':
+                            reject(outcome.error);
+                            break;
                     }
                 });
             } else {
