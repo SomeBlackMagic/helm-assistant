@@ -193,50 +193,54 @@ export class UpgradeModule {
             ];
         this.intervals.push(setInterval(() => {
             (async () => {
-                const result = await this.createChildProcess(ConfigFactory.getCore().KUBECTL_BIN_PATH, newProcessArgs, true, true);
-                if (result === '') {
-                    Logger.info('UpgradeModule:watchJobStatus', 'Job not found in release. Wait for job');
-                    return;
-                }
-
-                let resultJson:any = {};
                 try {
-                    resultJson = JSON.parse(result);
-                } catch (e) {
-                    Logger.fatal('UpgradeModule', 'Can not parse JSON output.', result);
-                    return;
-                }
-
-                if (Object.keys(resultJson).length === 0) {
-                    Logger.warn('UpgradeModule:watchJobStatus', 'Empty result from kube api');
-                    return;
-                }
-                if (resultJson.items.length === 0) {
-                    Logger.info('UpgradeModule:watchJobStatus', 'Jobs not found in release. Wait for job');
-                    return;
-                }
-                resultJson.items.forEach((jobItem: any) => {
-                    const creationTimestamp = jobItem?.metadata?.creationTimestamp;
-                    if (typeof creationTimestamp === 'string' && new Date(creationTimestamp) < watchStartedAt) {
-                        Logger.trace('UpgradeModule:watchJobStatus', 'Skip stale job created before this upgrade started', {job: jobItem?.metadata?.name});
+                    const result = await this.createChildProcess(ConfigFactory.getCore().KUBECTL_BIN_PATH, newProcessArgs, true, true);
+                    if (result === '') {
+                        Logger.info('UpgradeModule:watchJobStatus', 'Job not found in release. Wait for job');
                         return;
                     }
-                    if (typeof jobItem?.status?.conditions !== 'undefined') {
-                        jobItem.status.conditions.forEach((item: any) => {
-                            if (item.type === 'Failed' && item.status === 'True') {
-                                Logger.info('UpgradeModule:watchJobStatus', 'Job is failed. Exit!', {
-                                    job: jobItem?.metadata?.name,
-                                    reason: item.reason,
-                                    message: item.message,
-                                });
-                                process.exitCode = 1;
-                                process.emit('SIGTERM');
-                            }
-                        });
-                    } else {
-                        Logger.trace('UpgradeModule:watchJobStatus', 'Conditions not found in Job');
+
+                    let resultJson: any = {};
+                    try {
+                        resultJson = JSON.parse(result);
+                    } catch (e) {
+                        Logger.fatal('UpgradeModule', 'Can not parse JSON output.', result);
+                        return;
                     }
-                });
+
+                    if (Object.keys(resultJson).length === 0) {
+                        Logger.warn('UpgradeModule:watchJobStatus', 'Empty result from kube api');
+                        return;
+                    }
+                    if (resultJson.items.length === 0) {
+                        Logger.info('UpgradeModule:watchJobStatus', 'Jobs not found in release. Wait for job');
+                        return;
+                    }
+                    resultJson.items.forEach((jobItem: any) => {
+                        const creationTimestamp = jobItem?.metadata?.creationTimestamp;
+                        if (typeof creationTimestamp === 'string' && new Date(creationTimestamp) < watchStartedAt) {
+                            Logger.trace('UpgradeModule:watchJobStatus', 'Skip stale job created before this upgrade started', {job: jobItem?.metadata?.name});
+                            return;
+                        }
+                        if (typeof jobItem?.status?.conditions !== 'undefined') {
+                            jobItem.status.conditions.forEach((item: any) => {
+                                if (item.type === 'Failed' && item.status === 'True') {
+                                    Logger.info('UpgradeModule:watchJobStatus', 'Job is failed. Exit!', {
+                                        job: jobItem?.metadata?.name,
+                                        reason: item.reason,
+                                        message: item.message,
+                                    });
+                                    process.exitCode = 1;
+                                    process.emit('SIGTERM');
+                                }
+                            });
+                        } else {
+                            Logger.trace('UpgradeModule:watchJobStatus', 'Conditions not found in Job');
+                        }
+                    });
+                } catch (e) {
+                    Logger.error('UpgradeModule:watchJobStatus', 'Failed to poll job status from kube api', {error: e?.message});
+                }
             })();
         }, 1000));
     }
