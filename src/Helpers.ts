@@ -19,7 +19,7 @@ export function inArray(arr: string[] | number[] = [], val:string|number): boole
 }
 
 export function env(key: string, defaultValue: any = null): string {
-    return process.env[key] ? process.env[key] :  defaultValue;
+    return process.env[key] ?? defaultValue;
 }
 
 /**
@@ -28,8 +28,8 @@ export function env(key: string, defaultValue: any = null): string {
  * @param defaultValue
  * @param radix
  */
-export function envNumber(key: string, defaultValue: number = null, radix: number): number {
-    return process.env[key] ? parseInt(process.env[key], radix) :  defaultValue;
+export function envNumber(key: string, defaultValue: number = 0, radix: number): number {
+    return process.env[key] ? parseInt(process.env[key]!, radix) : defaultValue;
 }
 
 
@@ -55,7 +55,7 @@ export function envBoolean(key: string, defaultValue: boolean): boolean {
 }
 
 export function processSignalDebug(name: string, stream: ChildProcessWithoutNullStreams | NodeJS.Process) {
-    if (ConfigFactory.getCore().HELM_ASSISTANT_DEBUG === true) {
+    if (ConfigFactory.getCore().HELM_ASSISTANT_DEBUG) {
         if ('spawnargs' in stream) {
             Logger.trace('processDebugger', 'Spawn new process: [' + stream.pid + ']' + name + ' ' + stream.spawnargs.join(' '));
         } else {
@@ -156,7 +156,7 @@ function loadEnvFile(path: string): boolean | DotenvParseOutput {
             console.warn(dotEnv.error);
             return false;
         }
-        return dotEnv.parsed;
+        return dotEnv.parsed ?? false;
     } catch (err) {
         console.warn(err);
         return false;

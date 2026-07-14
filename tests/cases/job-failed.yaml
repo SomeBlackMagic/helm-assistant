@@ -10,14 +10,14 @@ job:
   command: 'bash'
   arguments: '/test.sh'
 
-  backoffLimit: 0
+  backoffLimit: 3
   parallelism: 1
-  ttlSecondsAfterFinished: 10
+  ttlSecondsAfterFinished: 3000
   completions: 1
   activeDeadlineSeconds: 60
 
 
 extraEnvVars:
-  APP_WHILE_COUNT: 1
+  APP_WHILE_COUNT: 5
   APP_SLEEP_TIME: 1
-  APP_EXIT_CODE: 1
+  APP_EXIT_CODE: 0

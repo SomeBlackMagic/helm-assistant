@@ -9,7 +9,7 @@ function buildJob(overrides: Partial<V1Job> & {name: string; creationTimestamp: 
         metadata: {
             name: overrides.name,
             namespace: 'default',
-            creationTimestamp: overrides.creationTimestamp,
+            creationTimestamp: new Date(overrides.creationTimestamp),
         },
         status: overrides.status,
     };

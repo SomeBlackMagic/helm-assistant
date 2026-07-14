@@ -1,3 +1,4 @@
+#hermes --resume 20260713_142701_5ad2e9
 metadata:
   deployedBy: null-value
   pipelineUrl: null-value
@@ -91,7 +92,7 @@ containerSecurityContext:
   readOnlyRootFilesystem: false
 
 terminationGracePeriodSeconds: 30
-restartPolicy: OnFailure
+restartPolicy: Never
 
 ## @param podLabels Extra labels for  pods
 ## ref: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/

@@ -16,7 +16,7 @@ export class HelmProxyModule {
                 // stdio: [null, 'pipe', 'pipe']
                 env: process.env
             });
-            this.process.stdout.on('data', (arrayBuffer) => {
+            this.process!.stdout!.on('data', (arrayBuffer) => {
                 const data = Buffer.from(arrayBuffer, 'utf-8').toString().split('\n');
                 data.forEach((item, index) => {
                     if (item !== '') {
@@ -24,7 +24,7 @@ export class HelmProxyModule {
                     }
                 });
             });
-            this.process.stderr.on('data', (arrayBuffer) => {
+            this.process!.stderr!.on('data', (arrayBuffer) => {
                 const data = Buffer.from(arrayBuffer, 'utf-8').toString().split('\n');
                 data.forEach((item, index) => {
                     if (item !== '') {
@@ -42,7 +42,7 @@ export class HelmProxyModule {
                     this.process = null;
                 } else {
                     this.process = null;
-                    process.exitCode = code;
+                    process.exitCode = code ?? undefined;
                     Logger.error('HelmProxyModule', 'helm process failed', {code, signal});
                     resolve();
                 }
@@ -51,21 +51,22 @@ export class HelmProxyModule {
     }
 
     public async stop(): Promise<boolean> {
-        if (this.process === null) {
+        const proc = this.process;
+        if (proc === null) {
             return Promise.resolve(true);
         }
         return new Promise((resolve, reject) => {
-            this.process.kill('SIGTERM');
+            proc.kill('SIGTERM');
 
-            const  timer = setTimeout(() => {
+            const timer = setTimeout(() => {
                 console.log('[helm-assistant] Timeout waiting stop helm. Killing');
-                this.process.kill('SIGKILL');
-                // clearInterval(interval);
+                try { proc.kill('SIGKILL'); } catch (e) {}
+                resolve(true);
             }, 10000);
-            // this.process.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
+            // proc.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
             //     console.log('close');
             // });
-            this.process.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
+            proc.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
                 Logger.trace('HelmProxyModule', 'helm process finished', {code, signal});
                 clearTimeout(timer);
                 this.process = null;

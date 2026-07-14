@@ -7,7 +7,7 @@ export HELM_ASSISTANT_UPGRADE_JOB_STRICT=true
 helm dependency build ${TESTS_PWD}data/charts/app-job
 
 ${HELM_ASSISTANT_BIN_CMD} upgrade \
-  --install helm-assistant-test-worker \
+  --install helm-assistant-test-job \
   --debug \
   --wait \
   --wait-for-jobs \
