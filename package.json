@@ -26,7 +26,7 @@
     "eslint": "^8.46.0",
     "mocha": "^10.2.0",
     "node-loader": "^0.6.0",
-    "pkg": "^5.8.1",
+    "@yao-pkg/pkg": "^6.21.0",
     "standard": "^17.1.0",
     "ts-loader": "^8.0.10",
     "ts-node": "^10.9.1",
