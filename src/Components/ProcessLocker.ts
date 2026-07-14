@@ -5,8 +5,6 @@ import * as console from 'console';
 
 export default class ProcessLocker {
 
-    private driver: 'fs' | 'redis';
-
     public options: ProcessLockerOptions;
 
     private timer: NodeJS.Timeout | string | number | undefined;
@@ -24,9 +22,9 @@ export default class ProcessLocker {
 
     }
     public clearLock(resource: string): Promise<any> {
-        return new Promise(function(resolve, reject) {
+        return new Promise((resolve: (arg0: boolean) => void, reject: any) => {
             if (fs.existsSync(this.options.fsDirPath + '/' + resource + '.lock')) {
-                fs.unlink(this.options.fsDirPath + '/' + resource + '.lock', function(err) {
+                fs.unlink(this.options.fsDirPath + '/' + resource + '.lock', (err) => {
                     if (err) {
                         process.stderr.write('[helm-assistant][release-locker] ERROR: Can not remove lock file: ' + this.options.fsDirPath + '/' + resource + '.lock' + '\n');
                         resolve(true);
@@ -34,14 +32,14 @@ export default class ProcessLocker {
                         process.stdout.write('[helm-assistant][release-locker] INFO: Successfully unlock: ' + this.options.fsDirPath + '/' + resource + '.lock' + '\n');
                         resolve(true);
                     }
-                }.bind(this));
+                });
             } else {
                 if (ConfigFactory.getCore().HELM_ASSISTANT_DEBUG_LEVEL >= 1) {
                     process.stderr.write('[helm-assistant][release-locker] DEBUG: lock file not found' + '\n');
                 }
                 resolve(true);
             }
-        }.bind(this));
+        });
     }
 
     private initFSLocker():  Promise<any> {
@@ -84,8 +82,8 @@ export default class ProcessLocker {
     private putLockData(key: string): Promise<boolean> {
         const date = new Date();
         date.setSeconds(date.getSeconds() + this.options.maxRetries);
-        return new Promise(function(resolve, reject) {
-            fs.writeFile(this.options.fsDirPath + '/' + key + '.lock', date.toString(), 'utf8', function(err) {
+        return new Promise((resolve, reject) => {
+            fs.writeFile(this.options.fsDirPath + '/' + key + '.lock', date.toString(), 'utf8', (err) => {
                 if (err) {
                     process.stderr.write('\n' + '[helm-assistant][release-locker] ERROR: Can not create lock file: ' + JSON.stringify(err) + '\n');
                     reject(false);
@@ -93,8 +91,8 @@ export default class ProcessLocker {
                     process.stdout.write('\n' + '[helm-assistant][release-locker] INFO: Successfully acquired lock on: ' + this.options.fsDirPath + '/' + key + '.lock' + '\n');
                     resolve(true);
                 }
-            }.bind(this));
-        }.bind(this));
+            });
+        });
     }
 
 }

@@ -18,7 +18,7 @@ build:
 
 
 app:
-		docker build -f .docker/app/Dockerfile \
+	docker build -f .docker/app/Dockerfile \
 		-t $(DOCKER_SERVER_HOST)/$(DOCKER_PROJECT_PATH)/node$(DOCKER_NODE_VERSION)-test:$(DOCKER_IMAGE_VERSION) \
 		--build-arg DOCKER_SERVER_HOST=$(DOCKER_SERVER_HOST) \
 		--build-arg DOCKER_PROJECT_PATH=$(DOCKER_PROJECT_PATH) \

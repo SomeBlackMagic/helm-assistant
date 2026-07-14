@@ -6,8 +6,8 @@ import {HelmProxyModule} from './Modules/HelmProxyModule';
 import {VersionModule} from './Modules/VersionModule';
 import * as console from 'console';
 import {hideBin} from 'yargs/helpers';
-import * as yargs from 'yargs';
-import * as process from 'process';
+import yargs from 'yargs';
+import process from 'process';
 
 loadEnvVariablesFromFile();
 
@@ -17,7 +17,6 @@ const helmProxyModule = new HelmProxyModule();
 const versionModule = new VersionModule();
 
 processHelper.setExitHandler((data: { code: string }) => {
-    process.emit('message', '', '');
     (async () => {
         if (!inArray(['exit'], data.code)) {
             console.log('[helm-assistant] Stop signal received ', [data.code]);
@@ -27,9 +26,9 @@ processHelper.setExitHandler((data: { code: string }) => {
             return item.stop();
         })).catch((error) => {
             console.log('[helm-assistant] Can not stop services', error);
-            // process.exitCode = 1;
         });
         console.log('[helm-assistant] System gracefully stopped');
+        process.exit(process.exitCode ?? 0);
     })();
 });
 processHelper.subscribeOnProcessExit();
@@ -37,10 +36,10 @@ processHelper.subscribeOnProcessExit();
 (async () => {
 
     let HELM_CMD_ARGS = ConfigFactory.getCore().HELM_CMD_ARGS;
-    if (ConfigFactory.getCore().HELM_DEBUG === true) {
+    if (ConfigFactory.getCore().HELM_DEBUG) {
         HELM_CMD_ARGS += ' --debug';
     }
-    if (ConfigFactory.getCore().HELM_DRY_RUN === true) {
+    if (ConfigFactory.getCore().HELM_DRY_RUN) {
         HELM_CMD_ARGS += ' --dry-run';
     }
     const argv:any = yargs(hideBin(process.argv))
