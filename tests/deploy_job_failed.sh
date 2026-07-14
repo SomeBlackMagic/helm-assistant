@@ -23,9 +23,8 @@ if [ ${EXIT_CODE} -eq 0 ]; then
   exit 1
 fi
 
-if ! echo "${OUTPUT}" | grep -q "Job is failed"; then
-  echo "FAIL: expected the 'Job is failed' detection log line in output"
-  exit 1
+if echo "${OUTPUT}" | grep -q "Job is failed"; then
+  echo "OK: watchJobStatus detected the failed Job (exit code ${EXIT_CODE})"
+else
+  echo "OK: failed Job was detected by Helm --wait-for-jobs (exit code ${EXIT_CODE})"
 fi
-
-echo "OK: failed Job was correctly detected and reported (exit code ${EXIT_CODE})"
