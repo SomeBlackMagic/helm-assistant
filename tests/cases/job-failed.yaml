@@ -20,4 +20,4 @@ job:
 extraEnvVars:
   APP_WHILE_COUNT: 5
   APP_SLEEP_TIME: 1
-  APP_EXIT_CODE: 0
+  APP_EXIT_CODE: 1
