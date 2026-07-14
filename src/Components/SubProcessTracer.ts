@@ -1,12 +1,12 @@
 import Logger from './Logger';
-import {ChildProcessWithoutNullStreams} from 'child_process';
-import * as process from 'process';
+import {ChildProcess, ChildProcessWithoutNullStreams} from 'child_process';
+import process from 'process';
 
 export class SubProcessTracer {
     private static instance: SubProcessTracer;
     private logger: Logger;
-    private processList: { [n: number]: ChildProcessWithoutNullStreams } = {};
-    private processListPrintInterval: NodeJS.Timer | null = null;
+    private processList: { [n: number]: ChildProcessWithoutNullStreams | ChildProcess } = {};
+    private processListPrintInterval: NodeJS.Timeout | null = null;
     private shutdown: boolean = false;
     /**
      * The Singleton's constructor should always be private to prevent direct
@@ -34,11 +34,12 @@ export class SubProcessTracer {
         return SubProcessTracer.instance;
     }
 
-    public watch(stream) {
-        this.processList[stream.pid] = stream;
+    public watch(stream: ChildProcessWithoutNullStreams|ChildProcess ) {
+        this.processList[stream.pid!] = stream;
         if ('spawnargs' in stream) {
             this.logger.trace('Spawn new process: [' + stream.pid + '] ' + stream.spawnargs.join(' '));
         } else {
+            // @ts-ignore
             this.logger.trace('Spawn new process: [' + stream.pid + '] ' + stream.argv.join(' '));
         }
 
@@ -52,7 +53,7 @@ export class SubProcessTracer {
         stream.on('removeListener', (type: string) => {this.logger.trace('[' + stream.pid + ']' + ' send => removeListener' , {type}); });
         stream.on('multipleResolves', () => {this.logger.trace('[' + stream.pid + ']' + ' send => multipleResolves '); });
         stream.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
-            delete this.processList[stream.pid];
+            delete this.processList[stream.pid!];
 
             if (code !== 0 ) {
                 this.logger.debug('[' + stream.pid + ']' + ' send => exit:' + code, {signal: signal} );
@@ -112,7 +113,7 @@ export class SubProcessTracer {
         if (null === this.processListPrintInterval) {
             this.processListPrintInterval = setInterval(() => {
                 if (this.shutdown === true && Object.entries(this.processList).length === 0) {
-                    clearInterval(this.processListPrintInterval);
+                    clearInterval(this.processListPrintInterval!);
                 }
                 let list = [];
                 for (const [key, value] of Object.entries(this.processList)) {

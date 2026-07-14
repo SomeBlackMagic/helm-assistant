@@ -1,5 +1,5 @@
 export class ProcessHelper {
-    public exitHandler: Function;
+    public exitHandler!: Function;
 
 
     public subscribeOnProcessExit(): void {
@@ -37,12 +37,12 @@ export class ProcessHelper {
 
     }
 
-    public uncaughtRejectionHandler(reason: {} | null | undefined, promise: Promise<any>) {
+    public uncaughtRejectionHandler(reason: unknown, promise: Promise<unknown>) {
         console.error('Helm Assistant: Uncaught Rejection');
         console.error('-----------------------------------');
-        if (typeof reason !== 'undefined') {
-            console.error(reason['message']);
-            console.error(reason['stack']);
+        if (reason instanceof Error) {
+            console.error(reason.message);
+            console.error(reason.stack);
         } else {
             console.error(JSON.stringify(reason));
         }

@@ -12,10 +12,10 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Use Node.js 16.x
+    - name: Use Node.js 24.x
       uses: actions/setup-node@v3
       with:
-        node-version: '16.x'
+        node-version: '24.x'
 
     - name: Install dependencies
       run: yarn
@@ -23,11 +23,14 @@ jobs:
     - name: Run lint code
       run: yarn run lint
 
+    - name: Run unit tests
+      run: yarn run test
+
     - name: Compile application to binary
       run: yarn run build
 
     - name: Archive binary
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: helm-assistant-linux-amd64
         path: helm-assistant
@@ -57,7 +60,7 @@ jobs:
       
       
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: helm-assistant-linux-amd64
           path: .
@@ -81,3 +84,10 @@ jobs:
           export HELM_ASSISTANT_BIN_CMD="./helm-assistant"
           export TESTS_PWD=$(pwd)/tests/
           bash tests/deploy_job.sh
+
+      - name: Run test -> deploy_job_failed
+        run: |
+          chmod +x helm-assistant
+          export HELM_ASSISTANT_BIN_CMD="./helm-assistant"
+          export TESTS_PWD=$(pwd)/tests/
+          bash tests/deploy_job_failed.sh

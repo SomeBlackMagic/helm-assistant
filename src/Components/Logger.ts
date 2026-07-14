@@ -1,6 +1,5 @@
 import {ConfigFactory} from '../Config/app-config';
 import * as console from 'console';
-import * as process from 'process';
 import {inArray} from '../Helpers';
 
 export default class Logger {
