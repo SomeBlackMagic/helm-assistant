@@ -191,4 +191,13 @@ describe('interpretChildProcessExit', () => {
 
         expect(outcome.kind).to.equal('error');
     });
+
+    it('includes stderr in the error message so kubectl failures are diagnosable', () => {
+        const outcome = interpretChildProcessExit(1, null, '', 'Unable to connect to the server: connection reset by peer\n');
+
+        expect(outcome.kind).to.equal('error');
+        if (outcome.kind === 'error') {
+            expect(outcome.error.message).to.equal('command failed. Code: 1. Unable to connect to the server: connection reset by peer');
+        }
+    });
 });

@@ -61,14 +61,15 @@ export type ChildProcessExitOutcome =
  * once the underlying process exits, isolated from spawn() so it is unit
  * testable without a real child process.
  */
-export function interpretChildProcessExit(code: number | null, signal: NodeJS.Signals | null, stdout: string): ChildProcessExitOutcome {
+export function interpretChildProcessExit(code: number | null, signal: NodeJS.Signals | null, stdout: string, stderr: string = ''): ChildProcessExitOutcome {
     if (code === 0) {
         return {kind: 'success', stdout};
     }
     if (signal === 'SIGINT') {
         return {kind: 'resolved-empty'};
     }
-    return {kind: 'error', error: new Error('command failed. Code: ' + code)};
+    const details = stderr.trim();
+    return {kind: 'error', error: new Error('command failed. Code: ' + code + (details !== '' ? '. ' + details : ''))};
 }
 
 export class UpgradeModule {
@@ -80,7 +81,6 @@ export class UpgradeModule {
     private intervals: NodeJS.Timeout[] = [];
     private lockComponent: ProcessLocker = new ProcessLocker();
     private initialJobUids: Set<string> = new Set();
-    private isFirstPoll: boolean = true;
 
     public async run(cliArgs: any): Promise<any> {
         this.isWork = true;
@@ -172,7 +172,12 @@ export class UpgradeModule {
     }
 
     private kubectlWatchPodsLogsAndEvents() {
+        let inFlight = false;
         this.intervals.push(setInterval(() => {
+            if (inFlight) {
+                return;
+            }
+            inFlight = true;
             (async () => {
                 let newProcessArgs: string[] = [
                     ...ConfigFactory.getCore().KUBECTL_CMD_ARGS.split(' '),
@@ -181,12 +186,24 @@ export class UpgradeModule {
                     '--selector', 'app.kubernetes.io/instance=' + this.releaseName,
                     '-o', 'json'
                 ];
-                const pods = await this.createChildProcess(ConfigFactory.getCore().KUBECTL_BIN_PATH, newProcessArgs, true, true);
+                // Log watching is auxiliary: a transient kubectl/API failure must never
+                // escape as an unhandled rejection, because that stops the whole app and
+                // kills the running helm upgrade, leaving the release in pending-upgrade.
+                let pods: string;
+                try {
+                    pods = await this.createChildProcess(ConfigFactory.getCore().KUBECTL_BIN_PATH, newProcessArgs, true, true);
+                } catch (e) {
+                    Logger.warn('UpgradeModule', 'Failed to get pods from kube api', {error: e instanceof Error ? e.message : String(e)});
+                    return;
+                }
+                if (typeof pods !== 'string' || pods.trim() === '') {
+                    return;
+                }
                 let podList: any = {};
                 try {
                     podList = JSON.parse(pods);
                 } catch (e) {
-                    Logger.fatal('UpgradeModule', 'Can not parse JSON output.', pods);
+                    Logger.warn('UpgradeModule', 'Can not parse JSON output.', {pods});
                     return;
                 }
 
@@ -211,7 +228,11 @@ export class UpgradeModule {
                         });
                     }
                 });
-            })();
+            })().catch((e) => {
+                Logger.warn('UpgradeModule', 'Failed to process pods', {error: e instanceof Error ? e.message : String(e)});
+            }).finally(() => {
+                inFlight = false;
+            });
         }, 1000));
     }
 
@@ -252,20 +273,41 @@ export class UpgradeModule {
                 '--namespace', this.namespace,
                 '-o', 'json',
             ];
+        // Snapshot the Jobs that exist before helm starts, so that only Jobs created by
+        // this upgrade are evaluated. Doing it lazily on the first interval tick is racy:
+        // if that tick lands after helm created the new Job, the new Job is treated as
+        // pre-existing and its failure is ignored.
+        try {
+            const initial = this.parseJobList(await this.createChildProcess(ConfigFactory.getCore().KUBECTL_BIN_PATH, newProcessArgs, true, true));
+            (initial.items ?? []).forEach((item) => {
+                if (item.metadata?.uid) {
+                    this.initialJobUids.add(item.metadata.uid);
+                }
+            });
+            Logger.info('UpgradeModule:watchJobStatus', 'Initialized initial Job UIDs from existing jobs', {count: this.initialJobUids.size});
+        } catch (e) {
+            Logger.warn('UpgradeModule:watchJobStatus', 'Can not get existing jobs before upgrade', {error: e instanceof Error ? e.message : String(e)});
+        }
+
+        let inFlight = false;
         this.intervals.push(setInterval(() => {
+            if (inFlight) {
+                return;
+            }
+            inFlight = true;
             (async () => {
                 try {
                     const result: string = await this.createChildProcess(ConfigFactory.getCore().KUBECTL_BIN_PATH, newProcessArgs, true, true);
-                    if (result === '') {
+                    if (typeof result !== 'string' || result.trim() === '') {
                         Logger.info('UpgradeModule:watchJobStatus', 'Job not found in release. Wait for job');
                         return;
                     }
 
                     let resultJson: Partial<V1JobList> = {};
                     try {
-                        resultJson = JSON.parse(result) as V1JobList;
+                        resultJson = this.parseJobList(result);
                     } catch (e) {
-                        Logger.fatal('UpgradeModule', 'Can not parse JSON output.', {result});
+                        Logger.warn('UpgradeModule:watchJobStatus', 'Can not parse JSON output.', {result});
                         return;
                     }
 
@@ -279,17 +321,6 @@ export class UpgradeModule {
                     }
 
                     // Filter out jobs that existed before the monitoring started to avoid reacting to old, failed jobs.
-                    if (this.isFirstPoll) {
-                        resultJson.items.forEach(item => {
-                            if (item.metadata?.uid) {
-                                this.initialJobUids.add(item.metadata.uid);
-                            }
-                        });
-                        this.isFirstPoll = false;
-                        Logger.info('UpgradeModule:watchJobStatus', 'Initialized initial Job UIDs from existing jobs', { count: this.initialJobUids.size });
-                        return;
-                    }
-
                     const currentItems = resultJson.items.filter(item => {
                         const uid = item.metadata?.uid;
                         return typeof uid === 'string' && !this.initialJobUids.has(uid);
@@ -312,9 +343,18 @@ export class UpgradeModule {
                     }
                 } catch (e) {
                     Logger.error('UpgradeModule:watchJobStatus', 'Failed to poll job status from kube api', {error: e instanceof Error ? e.message : String(e)});
+                } finally {
+                    inFlight = false;
                 }
             })();
         }, 1000));
+    }
+
+    private parseJobList(result: string): Partial<V1JobList> {
+        if (typeof result !== 'string' || result.trim() === '') {
+            return {};
+        }
+        return JSON.parse(result) as V1JobList;
     }
 
     private async createChildProcess(
@@ -356,6 +396,7 @@ export class UpgradeModule {
                 return item !== '';
             }));
             let stdout: string = '';
+            let stderr: string = '';
             if (pipeLogs) {
                 process.stdout.on('data', (arrayBuffer) => {
                     const data = Buffer.from(arrayBuffer, 'utf-8').toString().split('\n');
@@ -377,20 +418,22 @@ export class UpgradeModule {
                 });
             } else if (grabStdOut === true) {
                 process.stdout.on('data', (arrayBuffer) => {
-                    const data = Buffer.from(arrayBuffer, 'utf-8').toString().split('\n');
-                    data.forEach((item, index) => {
-                        if (item !== '') {
-                            stdout += item;
-                        }
-                    });
-
+                    stdout += Buffer.from(arrayBuffer, 'utf-8').toString();
+                });
+                process.stderr.on('data', (arrayBuffer) => {
+                    stderr += Buffer.from(arrayBuffer, 'utf-8').toString();
                 });
             }
             SubProcessTracer.getInstance().watch(process);
 
             if (wait) {
-                process.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {
-                    const outcome = interpretChildProcessExit(code, signal, stdout);
+                process.on('error', (error: Error) => {
+                    reject(error);
+                });
+                // 'close' (not 'exit'): 'exit' can fire before stdout is fully drained,
+                // which yields truncated/empty JSON.
+                process.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
+                    const outcome = interpretChildProcessExit(code, signal, stdout, stderr);
                     switch (outcome.kind) {
                         case 'success':
                             resolve(outcome.stdout);
