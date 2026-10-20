@@ -81,6 +81,7 @@ export class UpgradeModule {
     private intervals: NodeJS.Timeout[] = [];
     private lockComponent: ProcessLocker = new ProcessLocker();
     private initialJobUids: Set<string> = new Set();
+    private isJobBaselineReady: boolean = false;
 
     public async run(cliArgs: any): Promise<any> {
         this.isWork = true;
@@ -277,16 +278,18 @@ export class UpgradeModule {
         // this upgrade are evaluated. Doing it lazily on the first interval tick is racy:
         // if that tick lands after helm created the new Job, the new Job is treated as
         // pre-existing and its failure is ignored.
-        try {
-            const initial = this.parseJobList(await this.createChildProcess(ConfigFactory.getCore().KUBECTL_BIN_PATH, newProcessArgs, true, true));
-            (initial.items ?? []).forEach((item) => {
-                if (item.metadata?.uid) {
-                    this.initialJobUids.add(item.metadata.uid);
-                }
-            });
-            Logger.info('UpgradeModule:watchJobStatus', 'Initialized initial Job UIDs from existing jobs', {count: this.initialJobUids.size});
-        } catch (e) {
-            Logger.warn('UpgradeModule:watchJobStatus', 'Can not get existing jobs before upgrade', {error: e instanceof Error ? e.message : String(e)});
+        // Without a baseline no failure decision is made at all: otherwise a stale failed
+        // Job left from a previous release would abort this unrelated upgrade.
+        for (let attempt = 1; attempt <= 5 && !this.isJobBaselineReady && !this.isExit; attempt++) {
+            try {
+                this.setJobBaseline(this.parseJobList(await this.createChildProcess(ConfigFactory.getCore().KUBECTL_BIN_PATH, newProcessArgs, true, true)));
+            } catch (e) {
+                Logger.warn('UpgradeModule:watchJobStatus', 'Can not get existing jobs before upgrade. Retry', {attempt, error: e instanceof Error ? e.message : String(e)});
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+        }
+        if (!this.isJobBaselineReady) {
+            Logger.warn('UpgradeModule:watchJobStatus', 'Existing jobs baseline is not established before upgrade. Jobs present on the first successful poll will be ignored');
         }
 
         let inFlight = false;
@@ -313,6 +316,10 @@ export class UpgradeModule {
 
                     if (Object.keys(resultJson).length === 0) {
                         Logger.warn('UpgradeModule:watchJobStatus', 'Empty result from kube api');
+                        return;
+                    }
+                    if (!this.isJobBaselineReady) {
+                        this.setJobBaseline(resultJson);
                         return;
                     }
                     if (resultJson.items === undefined || resultJson.items.length === 0) {
@@ -348,6 +355,20 @@ export class UpgradeModule {
                 }
             })();
         }, 1000));
+    }
+
+    private setJobBaseline(jobList: Partial<V1JobList>) {
+        // Only a real list response is a safe baseline; empty/partial output is not.
+        if (!Array.isArray(jobList.items)) {
+            throw new Error('Unexpected kubectl output: no items list');
+        }
+        jobList.items.forEach((item) => {
+            if (item.metadata?.uid) {
+                this.initialJobUids.add(item.metadata.uid);
+            }
+        });
+        this.isJobBaselineReady = true;
+        Logger.info('UpgradeModule:watchJobStatus', 'Initialized initial Job UIDs from existing jobs', {count: this.initialJobUids.size});
     }
 
     private parseJobList(result: string): Partial<V1JobList> {
