@@ -72,6 +72,17 @@ export function interpretChildProcessExit(code: number | null, signal: NodeJS.Si
     return {kind: 'error', error: new Error('command failed. Code: ' + code + (details !== '' ? '. ' + details : ''))};
 }
 
+/**
+ * Request timeout for one-shot kubectl polls. kubectl's default is 0 (no timeout),
+ * so a stalled API request would hang the poll forever - and the pre-upgrade Job
+ * snapshot runs before helm starts, so it would block the deployment and hold the
+ * release lock. Placed before KUBECTL_CMD_ARGS so a user-supplied value wins.
+ */
+const KUBECTL_POLL_REQUEST_TIMEOUT = '10s';
+// Hard bound for one-shot kubectl processes, covering what --request-timeout does
+// not (e.g. a hung exec credential plugin).
+const KUBECTL_POLL_PROCESS_TIMEOUT_MS = 30000;
+
 export class UpgradeModule {
     private isWork: boolean = false; // for detect is module active on stop application
     private isExit: boolean = false;
@@ -181,6 +192,7 @@ export class UpgradeModule {
             inFlight = true;
             (async () => {
                 let newProcessArgs: string[] = [
+                    '--request-timeout', KUBECTL_POLL_REQUEST_TIMEOUT,
                     ...ConfigFactory.getCore().KUBECTL_CMD_ARGS.split(' '),
                     'get', 'pods',
                     '--namespace', this.namespace,
@@ -268,6 +280,7 @@ export class UpgradeModule {
         const watchStartedAt = new Date();
         const newProcessArgs: string[] =
             [
+                '--request-timeout', KUBECTL_POLL_REQUEST_TIMEOUT,
                 ...ConfigFactory.getCore().KUBECTL_CMD_ARGS.split(' '),
                 'get', 'job',
                 '--selector', 'app.kubernetes.io/instance=' + this.releaseName,
@@ -448,12 +461,18 @@ export class UpgradeModule {
             SubProcessTracer.getInstance().watch(process);
 
             if (wait) {
+                const killTimer = setTimeout(() => {
+                    stderr += 'process timed out after ' + KUBECTL_POLL_PROCESS_TIMEOUT_MS + 'ms';
+                    process.kill('SIGKILL');
+                }, KUBECTL_POLL_PROCESS_TIMEOUT_MS);
                 process.on('error', (error: Error) => {
+                    clearTimeout(killTimer);
                     reject(error);
                 });
                 // 'close' (not 'exit'): 'exit' can fire before stdout is fully drained,
                 // which yields truncated/empty JSON.
                 process.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
+                    clearTimeout(killTimer);
                     const outcome = interpretChildProcessExit(code, signal, stdout, stderr);
                     switch (outcome.kind) {
                         case 'success':
